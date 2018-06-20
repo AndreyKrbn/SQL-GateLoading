@@ -38,8 +38,17 @@ left join
 (select
    r.tid r_tid,
    b.Gate_id Gate_id,     
-   [План м3] = isnull(sum((tbl.Quantity / mu.UnitKoeff) * mu.UnitVolume),0),
-   [Занято ячеек] = isnull(CEILING(sum(tbl.Quantity * mu.UnitVolume)/1.4),0),
+   [План м3] = isnull(sum((tbl.Quantity / mu.UnitKoeff) * mu.UnitVolume),0),   
+   [Занято ячеек] = (select top 1  
+   --b.Route_id Route_id,
+    sum(CEILING(isnull(sum(vtbl.Quantity * vmu.UnitVolume),0)/1.4)) over(partition by vb.Gate_id, vb.Route_id)
+   from Routes vr (readpast)    
+   join hdr_delivery vb (readpast) on vr.tid = vb.Route_id    
+   join Transactions vt (readpast) on vb.Transaction_id = vt.tid    
+   join tbl_DeliveryRequestMaterials vtbl (readpast) on vt.ParentTransaction_id = vtbl.Transaction_id    
+   join MaterialUnits vmu (readpast) on vtbl.MaterialUnit_id = vmu.tid   
+   where vb.Route_id = r.tid      
+    group by vb.tid, vb.Gate_id, vb.Route_id),
    [Заявок] = Count(distinct b.tid),      
    [Строк] = Count(*)    
    from Routes r (readpast)    
@@ -47,8 +56,5 @@ left join
    join Transactions t (readpast) on b.Transaction_id = t.tid    
    join tbl_DeliveryRequestMaterials tbl (readpast) on t.ParentTransaction_id = tbl.Transaction_id    
    join MaterialUnits mu (readpast) on tbl.MaterialUnit_id = mu.tid
-   --join MaterialUnits as mu with (readpast) on mu.tid = case when dbo.bor_MaterialKoeff(b.MaterialUnit_id)>0 then b.MaterialUnit_id  else a.MaterialUnit_id  end   
-    group by r.tid, b.Gate_id) qRequest on (qRequest.r_tid  = s1.r_tid 
-	and qRequest.Gate_id = s1.Gate_id
-	)
+    group by r.tid, b.Gate_id) qRequest on (qRequest.r_tid  = s1.r_tid and qRequest.Gate_id = s1.Gate_id)	
 ORDER BY isnull(vl.TaskPriority,0), isnull(vl.WayListNumber,'')+N' - '+isnull(vl.direction,'')
