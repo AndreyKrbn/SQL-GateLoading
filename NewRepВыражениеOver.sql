@@ -39,8 +39,7 @@ left join
    r.tid r_tid,
    b.Gate_id Gate_id,     
    [План м3] = isnull(sum((tbl.Quantity / mu.UnitKoeff) * mu.UnitVolume),0),   
-   [Занято ячеек] = (select top 1  
-   --b.Route_id Route_id,
+   [Занято ячеек] = (select top 1     
     sum(CEILING(isnull(sum(vtbl.Quantity * vmu.UnitVolume),0)/1.4)) over(partition by vb.Gate_id, vb.Route_id)
    from Routes vr (readpast)    
    join hdr_delivery vb (readpast) on vr.tid = vb.Route_id    
