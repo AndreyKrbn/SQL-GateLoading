@@ -1,4 +1,5 @@
 
+
 (select top 1  
    b.Route_id Route_id,
    [Прогноз ячеек] = sum(CEILING(isnull(sum(tbl.Quantity * mu.UnitVolume),0)/1.4)) over(partition by b.Gate_id, b.Route_id)
@@ -10,3 +11,5 @@
    where b.Route_id = 117659      
     group by b.tid, b.Gate_id, b.Route_id)
 
+
+	select [dbo].[PlanUsedCells](117659)
