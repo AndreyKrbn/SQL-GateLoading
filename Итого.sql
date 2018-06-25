@@ -11,7 +11,8 @@ SET @columns = (
 					and l.StorageZone_id = tz.StorageZone_id
 					and l.RouteZone_id = tz.RouteZone_id
 				 join Gates gt with(nolock) on ((gt.tid=l.Gate_id and gt.NameRU like 'OUT%') or gt.NameRU = 'OUT1000')
-				group by gt.NameRU, tz.ExternalCode
+				where l.IsBlockInput=0
+				group by gt.NameRU, tz.ExternalCode				
 				order by cast (substring(gt.NameRU,4, len(gt.NameRU)) as int)
 				FOR XML PATH(''))
 
@@ -20,7 +21,7 @@ SET @columns = (
 
 
 declare @query nvarchar(max)
-
+declare @totalsel int
 
 set @query = N'SELECT [№ п/п] = '''',
                      [ПЛ+Направление] ='''',
@@ -37,7 +38,7 @@ set @query = N'SELECT [№ п/п] = '''',
 								when ''DOCKSTRING2'' then N'' (Сегмент 2)''
  								when ''DOCKSTRING3'' then N'' (Сегмент 3)''
 							end,
-				[Итого] = N'' (''+cast(isnull(s1.[Занято ячеек по ПЛ с заказами],0) as nvarchar(50))+N''/''+cast(isnull(s1.[Занято ячеек],0) as nvarchar(50))+N''/''+cast([dbo].AllOutCells(gt.tid) as nvarchar(50))+N'')''
+				[Итого] = N'' (''+cast(isnull(s1.[Занято ячеек по ПЛ с заказами],0) as nvarchar(50))+N''/''+cast(isnull(s1.[Занято ячеек],0) as nvarchar(50))+N''/''+cast([dbo].AllOutCells(gt.tid) as nvarchar(50))+N'')''+N'' (Free= ''+cast([dbo].AllOutCells(gt.tid)-isnull(s1.[Занято ячеек],0) as nvarchar(50))+N'')''
 				from
 				(select
 				tz.ExternalCode,
@@ -53,6 +54,7 @@ set @query = N'SELECT [№ п/п] = '''',
 				 isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
 				 and l.StorageZone_id = tz.StorageZone_id
 				 and l.RouteZone_id = tz.RouteZone_id
+				 where l.IsBlockInput = 0
 				group by
 				 l.Gate_id, tz.ExternalCode) s1
 				--обвес дока
