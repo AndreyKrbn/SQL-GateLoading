@@ -7,7 +7,7 @@ select
  [Заявок]=max(qRequest.Заявок) over(partition by s1.r_tid),
  [План м3/ячеек]=cast(cast(SUM(isnull(qRequest.[План м3],0)) over(partition by s1.r_tid) as decimal(26,3)) as nvarchar(100))+N'/'+cast(sum(isnull(qRequest.[Занято ячеек],0)) over(partition by s1.r_tid) as nvarchar(50)),  
  [Занято м3/ячеек]=cast(cast(SUM(isnull(s1.[Занято м3],0)) over(partition by s1.r_tid) as decimal(26,3)) as nvarchar(100))+N'/'+cast(sum(isnull(s1.[Занято ячеек],0)) over(partition by s1.r_tid) as nvarchar(50)),
- [Кол-о ячеек%]=vl.WayListNumber+N' ('+s1.[Кол-о ячеек]+N'/'+cast(tc.tc as nvarchar(50))+N')'+ case isnull(qRequest.Заявок,0) when 0 then '' else '*' end,
+ [Кол-о ячеек%]=vl.WayListNumber+N' ('+s1.[Кол-о ячеек]+N'/'+cast(tc.tc as nvarchar(50))+N')'+ case qRequest.Gate_id when s1.Gate_id then '*' end,
  [Док]=gt.NameRU 
 from
 (select

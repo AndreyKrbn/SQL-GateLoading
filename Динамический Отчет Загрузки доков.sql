@@ -84,7 +84,7 @@ select
  [Заявок]=qRequest.Заявок,
  [План м3/ячеек]=cast(cast(isnull(qRequest.[План м3],0) as decimal(26,3)) as nvarchar(100))+N''/''+cast(isnull(qRequest.[План ячеек],0) as nvarchar(50)),  
  [Занято м3/ячеек]=cast(cast(SUM(isnull(s1.[Занято м3],0)) over(partition by s1.r_tid) as decimal(26,3)) as nvarchar(100))+N''/''+cast(sum(isnull(s1.[Занято ячеек],0)) over(partition by s1.r_tid) as nvarchar(50)),
- [Кол-о ячеек%]=vl.WayListNumber+N'' (''+cast(s1.[Занято ячеек] as nvarchar(50))+N''/''+cast([dbo].AllOutCells(s1.Gate_id) as nvarchar(50))+N'')''+ case isnull(qRequest.Заявок,0) when 0 then '''' else ''*'' end,
+ [Кол-о ячеек%]=vl.WayListNumber+N'' (''+cast(s1.[Занято ячеек] as nvarchar(50))+N''/''+cast([dbo].AllOutCells(s1.Gate_id) as nvarchar(50))+N'')''+ case (select top 1 Gate_id from Routes where tid=s1.r_tid) when s1.Gate_id then ''*'' else '''' end,
  [Док]=gt.NameRU + case s1.ExternalCode 
     when ''DOCKSTRING1'' then N'' (Сегмент 1)''
 	when ''DOCKSTRING2'' then N'' (Сегмент 2)''
@@ -105,6 +105,7 @@ from Locations l (nolock)
  isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
  and l.StorageZone_id = tz.StorageZone_id
  and l.RouteZone_id = tz.RouteZone_id
+ where l.IsBlockInput=0
 group by
 r.tid, l.Gate_id, tz.ExternalCode) s1
 --обвес дока
@@ -115,7 +116,7 @@ left join VisitorsLog vl (nolock) on (vl.Route_id = s1.r_tid) --!!!!
 left join 
 (select
    r.tid r_tid,
-   b.Gate_id Gate_id,     
+--   b.Gate_id Gate_id,     
    [План м3]=isnull(sum((tbl.Quantity / mu.UnitKoeff) * mu.UnitVolume),0),   
    [План ячеек]=[dbo].PlanUsedCells(r.tid),
    [Заявок]=Count(distinct b.tid)      
@@ -125,7 +126,7 @@ left join
    join Transactions t (nolock) on b.Transaction_id = t.tid    
    join tbl_DeliveryRequestMaterials tbl (nolock) on t.ParentTransaction_id = tbl.Transaction_id    
    join MaterialUnits mu (nolock) on tbl.MaterialUnit_id = mu.tid
-    group by r.tid, b.Gate_id) qRequest on (qRequest.r_tid  = s1.r_tid)	
+    group by r.tid) qRequest on (qRequest.r_tid  = s1.r_tid)	
 			) x
             pivot 
             (
@@ -153,14 +154,16 @@ SET @columns = (
 					and l.RouteZone_id = tz.RouteZone_id
 				 join Gates gt with(nolock) on ((gt.tid=l.Gate_id and gt.NameRU like 'OUT%') or gt.NameRU = 'OUT1000')
 				where l.IsBlockInput=0
-				group by gt.NameRU, tz.ExternalCode
+				group by gt.NameRU, tz.ExternalCode				
 				order by cast (substring(gt.NameRU,4, len(gt.NameRU)) as int)
 				FOR XML PATH(''))
 
 			if @columns is null set @columns = ''
 			if len(@columns)> 0 set @columns = Left(@columns,len(@columns) - 1)
 
+
 declare @query nvarchar(max)
+declare @totalsel int
 
 set @query = N'SELECT [№ п/п] = '''',
                      [ПЛ+Направление] ='''',
@@ -177,7 +180,7 @@ set @query = N'SELECT [№ п/п] = '''',
 								when ''DOCKSTRING2'' then N'' (Сегмент 2)''
  								when ''DOCKSTRING3'' then N'' (Сегмент 3)''
 							end,
-				[Итого] = N'' (''+cast(isnull(s1.[Занято ячеек по ПЛ с заказами],0) as nvarchar(50))+N''/''+cast(isnull(s1.[Занято ячеек],0) as nvarchar(50))+N''/''+cast([dbo].AllOutCells(gt.tid) as nvarchar(50))+N'')''+N'' (Free= ''+cast([dbo].AllOutCells(gt.tid)-s1.[Занято ячеек] as nvarchar(50))+N'')''
+				[Итого] = N'' (''+cast(isnull(s1.[Занято ячеек по ПЛ с заказами],0) as nvarchar(50))+N''/''+cast(isnull(s1.[Занято ячеек],0) as nvarchar(50))+N''/''+cast([dbo].AllOutCells(gt.tid) as nvarchar(50))+N'')''+N'' (Free= ''+cast([dbo].AllOutCells(gt.tid)-isnull(s1.[Занято ячеек],0) as nvarchar(50))+N'')''
 				from
 				(select
 				tz.ExternalCode,
@@ -193,7 +196,7 @@ set @query = N'SELECT [№ п/п] = '''',
 				 isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
 				 and l.StorageZone_id = tz.StorageZone_id
 				 and l.RouteZone_id = tz.RouteZone_id
-				 where l.IsBlockInput = 0
+				 where l.IsBlockInput=0				 
 				group by
 				 l.Gate_id, tz.ExternalCode) s1
 				--обвес дока
@@ -206,5 +209,3 @@ set @query = N'SELECT [№ п/п] = '''',
                for [Док] in (' + @columns + ')
 		     ) p'
 exec (@query)
-
-

@@ -20,7 +20,7 @@
 				 isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
 				 and l.StorageZone_id = tz.StorageZone_id
 				 and l.RouteZone_id = tz.RouteZone_id
-				 where l.IsBlockInput = 0
+				 where l.IsBlockInput=0				 
 				group by
 				 l.Gate_id, tz.ExternalCode) s1
 				--обвес дока
