@@ -80,7 +80,7 @@ set @query = N'SELECT [№ п/п] = ROW_NUMBER() OVER (ORDER BY [Приоритет], [ПЛ+Нап
 select
  [ПЛ+Направление]=isnull(vl.WayListNumber,'''')+N'' - ''+isnull(vl.direction,''''), 
  [Приоритет]=isnull(vl.TaskPriority,0),
- [Дата и время отъезда] = cast(vl.WayListDate as smalldatetime),
+ [Дата и время отъезда] = cast(isNull(vl.ArrivalDate,vl.WayListDate) as smalldatetime),
  [Заявок]=qRequest.Заявок,
  [План м3/ячеек]=cast(cast(isnull(qRequest.[План м3],0) as decimal(26,3)) as nvarchar(100))+N''/''+cast(isnull(qRequest.[План ячеек],0) as nvarchar(50)),  
  [Занято м3/ячеек]=cast(cast(SUM(isnull(s1.[Занято м3],0)) over(partition by s1.r_tid) as decimal(26,3)) as nvarchar(100))+N''/''+cast(sum(isnull(s1.[Занято ячеек],0)) over(partition by s1.r_tid) as nvarchar(50)),
