@@ -1,4 +1,4 @@
-declare @columns nvarchar(max)
+declare @columns varchar(max)
 SET @columns = (
 				select  '[' + cast(gt.NameRU as nvarchar(50)) + case tz.ExternalCode when 'DOCKSTRING1' then N' (Сегмент 1)'
 				                                                                    when 'DOCKSTRING2' then N' (Сегмент 2)'
@@ -10,14 +10,14 @@ SET @columns = (
 					isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
 					and l.StorageZone_id = tz.StorageZone_id
 					and l.RouteZone_id = tz.RouteZone_id
-				 join Gates gt with(nolock) on ((gt.tid=l.Gate_id and gt.NameRU like 'OUT%') or gt.NameRU = 'OUT1000')
+				 join Gates gt with(nolock) on (gt.tid=l.Gate_id and gt.NameRU like 'OUT%')
 				where l.IsBlockInput=0
-				group by gt.NameRU, tz.ExternalCode				
+				group by gt.NameRU, tz.ExternalCode
 				order by cast (substring(gt.NameRU,4, len(gt.NameRU)) as int)
 				FOR XML PATH(''))
 
 			if @columns is null set @columns = ''
-			if len(@columns)> 0 set @columns = Left(@columns,len(@columns) - 1)
+			if len(@columns)> 0 set @columns = @columns + '[OUT1000 (Сегмент 1)]'
 
 
 declare @query nvarchar(max)

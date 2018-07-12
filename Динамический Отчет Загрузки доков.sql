@@ -43,8 +43,7 @@ BEGIN
 	RETURN @Result
 END')
 
-
-declare @columns nvarchar(max)
+declare @columns varchar(max)
 SET @columns = (
 				select  '[' + cast(gt.NameRU as nvarchar(50)) + case tz.ExternalCode when 'DOCKSTRING1' then N' (Сегмент 1)'
 				                                                                    when 'DOCKSTRING2' then N' (Сегмент 2)'
@@ -56,17 +55,16 @@ SET @columns = (
 					isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
 					and l.StorageZone_id = tz.StorageZone_id
 					and l.RouteZone_id = tz.RouteZone_id
-				 join Gates gt with(nolock) on ((gt.tid=l.Gate_id and gt.NameRU like 'OUT%') or gt.NameRU = 'OUT1000')
+				 join Gates gt with(nolock) on (gt.tid=l.Gate_id and gt.NameRU like 'OUT%')
 				where l.IsBlockInput=0
 				group by gt.NameRU, tz.ExternalCode
 				order by cast (substring(gt.NameRU,4, len(gt.NameRU)) as int)
 				FOR XML PATH(''))
 
 			if @columns is null set @columns = ''
-			if len(@columns)> 0 set @columns = Left(@columns,len(@columns) - 1)
+			if len(@columns)> 0 set @columns = @columns + '[OUT1000 (Сегмент 1)]'
 
-declare @query nvarchar(max)
-
+declare @query varchar(max)
 
 set @query = N'SELECT [№ п/п] = ROW_NUMBER() OVER (ORDER BY [Приоритет], [ПЛ+Направление]),
                      [ПЛ+Направление],
@@ -81,19 +79,23 @@ select
  [ПЛ+Направление]=isnull(vl.WayListNumber,'''')+N'' - ''+isnull(vl.direction,''''), 
  [Приоритет]=isnull(vl.TaskPriority,0),
  [Дата и время отъезда] = cast(isNull(vl.ArrivalDate,vl.WayListDate) as smalldatetime),
- [Заявок]=qRequest.Заявок,
- [План м3/ячеек]=cast(cast(isnull(qRequest.[План м3],0) as decimal(26,3)) as nvarchar(100))+N''/''+cast(isnull(qRequest.[План ячеек],0) as nvarchar(50)),  
- [Занято м3/ячеек]=cast(cast(SUM(isnull(s1.[Занято м3],0)) over(partition by s1.r_tid) as decimal(26,3)) as nvarchar(100))+N''/''+cast(sum(isnull(s1.[Занято ячеек],0)) over(partition by s1.r_tid) as nvarchar(50)),
- [Кол-о ячеек%]=vl.WayListNumber+N'' (''+cast(s1.[Занято ячеек] as nvarchar(50))+N''/''+cast([dbo].AllOutCells(s1.Gate_id) as nvarchar(50))+N'')''+ case (select top 1 Gate_id from Routes where tid=s1.r_tid) when s1.Gate_id then ''*'' else '''' end,
- [Док]=gt.NameRU + case s1.ExternalCode 
-    when ''DOCKSTRING1'' then N'' (Сегмент 1)''
-	when ''DOCKSTRING2'' then N'' (Сегмент 2)''
- 	when ''DOCKSTRING3'' then N'' (Сегмент 3)''
-end
+ [Заявок]=PLDelivery.Заявок,
+ [План м3/ячеек]=cast(cast(isnull(PLDelivery.[План м3],0) as decimal(26,3)) as nvarchar(100))+N''/''+cast(isnull(PLDelivery.[План ячеек],0) as nvarchar(50)),  
+ [Занято м3/ячеек]=cast(cast(SUM(isnull(cmpl.[Занято м3],0)) over(partition by cmpl.r_tid) as decimal(26,3)) as nvarchar(100))+N''/''+cast(sum(isnull(cmpl.[Занято ячеек],0)) over(partition by cmpl.r_tid) as nvarchar(50)),
+ [Кол-о ячеек%]=vl.WayListNumber+N'' (''+cast(isnull(cmpl.[Занято ячеек],0) as nvarchar(50))+N''/''+cast([dbo].AllOutCells(isnull(cmpl.Gate_id,PLDelivery.Gate_id)) as nvarchar(50))+N'')''+ case (select top 1 Gate_id from Routes where tid=PLDelivery.r_tid) when isnull(cmpl.Gate_id,PLDelivery.Gate_id) then ''*'' else '''' end,
+ [Док]=isnull(gtl.NameRU + case tzс.ExternalCode 
+    when ''SEGMENTCOMP1'' then N'' (Сегмент 1)''
+	when ''SEGMENTCOMP2'' then N'' (Сегмент 2)''
+ 	when ''SEGMENTCOMP3'' then N'' (Сегмент 3)''
+end,gtd.NameRU + case tzd.ExternalCode 
+    when ''SEGMENTCOMP1'' then N'' (Сегмент 1)''
+	when ''SEGMENTCOMP2'' then N'' (Сегмент 2)''
+ 	when ''SEGMENTCOMP3'' then N'' (Сегмент 3)''
+end)
+
 from
 (select
-tz.ExternalCode,
-l.Gate_id,
+l.Gate_id, --ячеек комплектации
 r.tid r_tid,
 [Занято м3]=sum(isnull(st.Volume,0)),
 [Занято ячеек]=count(distinct l.tid)
@@ -101,32 +103,33 @@ from Locations l (nolock)
  join ComplectationAreas cma (nolock) on (cma.tid = l.ComplectationArea_id and cma.NameRU=''Нитки доков'')
  join StorageObjects st (nolock) on (st.Location_id=l.tid)
  join Routes r (nolock) on (st.Route_id = r.tid)
- join Technozones as tz (nolock) on
- isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
- and l.StorageZone_id = tz.StorageZone_id
- and l.RouteZone_id = tz.RouteZone_id
- where l.IsBlockInput=0
+where l.IsBlockInput=0
 group by
-r.tid, l.Gate_id, tz.ExternalCode) s1
---обвес дока
- join Gates gt (nolock) on (gt.tid=s1.Gate_id and (gt.NameRU like ''%OUT%''))
-left join VisitorsLog vl (nolock) on (vl.Route_id = s1.r_tid) --!!!!
-
+r.tid, l.Gate_id) cmpl
+--обвес дока ячеек комплектации
+ join Gates gtl (nolock) on (gtl.tid=cmpl.Gate_id and (gtl.NameRU like ''%OUT%'')) -- ворота ячеек комплектации
+ join Technozones as tzс (nolock) on	tzс.tid = gtl.TechnoZone_id 
 --Заказы
-left join 
+right join 
 (select
    r.tid r_tid,
---   b.Gate_id Gate_id,     
-   [План м3]=isnull(sum((tbl.Quantity / mu.UnitKoeff) * mu.UnitVolume),0),   
+   b.Gate_id Gate_id, --заказа       
+   [План м3]=isnull(sum((tbl.Quantity / case mu.UnitKoeff when 0 then 1 else mu.UnitKoeff end) * mu.UnitVolume),0),   
    [План ячеек]=[dbo].PlanUsedCells(r.tid),
-   [Заявок]=Count(distinct b.tid)      
---   [Строк]=Count(*)    
+   [Заявок]=Count(distinct b.tid)         
    from Routes r (nolock)    
    join hdr_delivery b (nolock) on r.tid = b.Route_id    
    join Transactions t (nolock) on b.Transaction_id = t.tid    
    join tbl_DeliveryRequestMaterials tbl (nolock) on t.ParentTransaction_id = tbl.Transaction_id    
    join MaterialUnits mu (nolock) on tbl.MaterialUnit_id = mu.tid
-    group by r.tid) qRequest on (qRequest.r_tid  = s1.r_tid)	
+   where
+   b.IsShipped = 0
+    group by r.tid, b.Gate_id) PLDelivery on (PLDelivery.r_tid  = cmpl.r_tid)
+
+--Обвес путевого по заказам
+ join Gates gtd (nolock) on (gtd.tid=PLDelivery.Gate_id and (gtd.NameRU like ''%OUT%'')) -- ворота заказа
+ join VisitorsLog vl (nolock) on (vl.Route_id = PLDelivery.r_tid)	
+ join Technozones as tzd (nolock) on	tzd.tid = gtd.TechnoZone_id
 			) x
             pivot 
             (
@@ -134,13 +137,13 @@ left join
                for [Док] in (' + @columns + ')
 		     ) p
 			 where [Заявок] is not null				
-			 ORDER BY [Приоритет], [ПЛ+Направление]'
+			 ORDER BY [Приоритет], [Дата и время отъезда] desc, [ПЛ+Направление]'
 
 exec (@query)
 
 go
 -----------------------------------
-declare @columns nvarchar(max)
+declare @columns varchar(max)
 SET @columns = (
 				select  '[' + cast(gt.NameRU as nvarchar(50)) + case tz.ExternalCode when 'DOCKSTRING1' then N' (Сегмент 1)'
 				                                                                    when 'DOCKSTRING2' then N' (Сегмент 2)'
@@ -152,14 +155,14 @@ SET @columns = (
 					isnull(l.ComplectationArea_id, -1) = isnull(tz.ComplectationArea_id,-1)
 					and l.StorageZone_id = tz.StorageZone_id
 					and l.RouteZone_id = tz.RouteZone_id
-				 join Gates gt with(nolock) on ((gt.tid=l.Gate_id and gt.NameRU like 'OUT%') or gt.NameRU = 'OUT1000')
+				 join Gates gt with(nolock) on (gt.tid=l.Gate_id and gt.NameRU like 'OUT%')
 				where l.IsBlockInput=0
-				group by gt.NameRU, tz.ExternalCode				
+				group by gt.NameRU, tz.ExternalCode
 				order by cast (substring(gt.NameRU,4, len(gt.NameRU)) as int)
 				FOR XML PATH(''))
 
 			if @columns is null set @columns = ''
-			if len(@columns)> 0 set @columns = Left(@columns,len(@columns) - 1)
+			if len(@columns)> 0 set @columns = @columns + '[OUT1000 (Сегмент 1)]'
 
 
 declare @query nvarchar(max)
