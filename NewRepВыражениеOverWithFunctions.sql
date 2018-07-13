@@ -39,7 +39,7 @@ r.tid, l.Gate_id) cmpl
 right join 
 (select
    r.tid r_tid,
-   b.Gate_id Gate_id, --заказа       
+   b.Gate_id Gate_id, --поставки       
    [План м3]=isnull(sum((tbl.Quantity / case mu.UnitKoeff when 0 then 1 else mu.UnitKoeff end) * mu.UnitVolume),0),   
    [План ячеек]=[dbo].PlanUsedCells(r.tid),
    [Заявок]=Count(distinct b.tid)      
@@ -54,7 +54,7 @@ right join
    -- not exists (select  top 1 1 from hdr_DeliveryShipped where hdr_DeliveryShipped.Transaction_id = b.Transaction_id) 
     group by r.tid, b.Gate_id) PLDelivery on (PLDelivery.r_tid  = cmpl.r_tid)
 
---Обвес путевого по заказам
+--Обвес путевого по поставки
  join Gates gtd (nolock) on (gtd.tid=PLDelivery.Gate_id and (gtd.NameRU like '%OUT%')) -- ворота заказа
  join VisitorsLog vl (nolock) on (vl.Route_id = PLDelivery.r_tid)	
  join Technozones as tzd (nolock) on tzd.tid = gtd.TechnoZone_id
