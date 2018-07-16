@@ -66,7 +66,7 @@ SET @columns = (
 
 declare @query varchar(max)
 
-set @query = N'SELECT [№ п/п] = ROW_NUMBER() OVER (ORDER BY [Приоритет], [ПЛ+Направление]),
+set @query = N'SELECT [№ п/п] = ROW_NUMBER() OVER (ORDER BY [Приоритет], [Дата и время отъезда] desc, [ПЛ+Направление]),
                      [ПЛ+Направление],
 					 [Приоритет],
 					 [Дата и время отъезда],
